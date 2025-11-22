@@ -1,19 +1,32 @@
 import SwiftUI
 
+// Soft purple accent used throughout the UI
+private let oracleAccent = Color(hue: 0.75, saturation: 0.45, brightness: 0.98)
+
 struct HomeView: View {
     @EnvironmentObject var store: TaskStore
     
-    // In later steps we’ll use this for the “+” button.
     @State private var showingAddSheet = false
+    @State private var quickDumpText: String = ""
+    
+    // For now, this is a placeholder "one" task and steps.
+    // Later we’ll wire this up to real data + Apple Intelligence.
+    @State private var focusTaskTitle: String = "Write the weekly progress report"
+    @State private var starterSteps: [String] = [
+        "Open Notes or your doc template",
+        "Jot down 3 wins from this week",
+        "List one thing that still feels stuck"
+    ]
     
     var body: some View {
         NavigationStack {
             ZStack(alignment: .bottom) {
-                // Background
+                
+                // Background: very light purple gradient
                 LinearGradient(
                     colors: [
-                        Color(.systemBackground),
-                        Color(.secondarySystemBackground)
+                        Color(hue: 0.67, saturation: 0.16, brightness: 0.99),
+                        Color(hue: 0.78, saturation: 0.13, brightness: 0.97)
                     ],
                     startPoint: .top,
                     endPoint: .bottom
@@ -23,12 +36,17 @@ struct HomeView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 24) {
                         headerSection
-                        announcementsSection
-                        foldersSection
+                        
+                        FocusZoneCard(
+                            title: focusTaskTitle,
+                            steps: starterSteps
+                        )
+                        
+                        otherTasksSection
                     }
                     .padding(.horizontal, 20)
                     .padding(.top, 24)
-                    .padding(.bottom, 80) // space for floating button
+                    .padding(.bottom, 96) // space for floating button
                 }
                 
                 floatingAddButton
@@ -38,19 +56,26 @@ struct HomeView: View {
     }
 }
 
-// MARK: - Subviews
+// MARK: - Top Header
 
 private extension HomeView {
-    
-    // Big "ORACLE" title, like "YABA"
     var headerSection: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 4) {
+        HStack(spacing: 16) {
+            // App icon / avatar with crystal ball vibe
+            ZStack {
+                Circle()
+                    .fill(Color.white.opacity(0.45))
+                    .frame(width: 40, height: 40)
+                Text("🔮")
+                    .font(.system(size: 24))
+            }
+            
+            VStack(alignment: .leading, spacing: 2) {
                 Text("ORACLE")
                     .font(.system(size: 34, weight: .bold, design: .rounded))
                 
-                Text("Announcements")
-                    .font(.headline)
+                Text("One thing at a time")
+                    .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
             
@@ -66,105 +91,204 @@ private extension HomeView {
             .foregroundStyle(.primary)
         }
     }
-    
-    // Two rounded announcement cards
-    var announcementsSection: some View {
-        VStack(spacing: 12) {
-            AnnouncementRow(
-                icon: "🎉",
-                title: "What’s new in ORACLE v1.0?"
-            )
-            
-            AnnouncementRow(
-                icon: "⚠️",
-                title: "ToS and EULA are updated"
-            )
-        }
-    }
-    
-    // "Folders" label + social-style folder rows
-    var foldersSection: some View {
+}
+
+// MARK: - Other Tasks Section
+
+private extension HomeView {
+    var otherTasksSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
-                Image(systemName: "folder")
-                Text("Folders")
+                Text("Other Tasks")
                     .font(.headline)
+                
                 Spacer()
+                
+                Menu {
+                    // NEXT: hook these up to real sorting
+                    Button("By Created Date") {}
+                    Button("By Priority") {}
+                    Button("Alphabetical") {}
+                } label: {
+                    Label("Sort", systemImage: "arrow.up.arrow.down.circle")
+                        .labelStyle(.iconOnly)
+                        .font(.system(size: 20, weight: .semibold))
+                }
+                .foregroundStyle(.primary)
             }
             .foregroundStyle(.secondary)
             
+            QuickDumpInboxView(text: $quickDumpText)
+            
             VStack(spacing: 12) {
-                ForEach(Array(store.folders.enumerated()), id: \.element.id) { index, folder in
+                ForEach(Array(store.folders.enumerated()), id: \.element.id) { _, folder in
                     FolderRow(folder: folder, taskCount: folder.openTaskCount)
                 }
             }
         }
     }
-    
-    // Floating blue "+" button
+}
+
+// MARK: - Floating Add Button (centered at bottom)
+
+private extension HomeView {
     var floatingAddButton: some View {
-        HStack {
-            Spacer()
-            Button {
-                // In the next iteration we’ll present a sheet
-                // and actually add a new task.
-                showingAddSheet = true
-            } label: {
-                ZStack {
-                    Circle()
-                        .fill(Color.blue)
-                        .frame(width: 72, height: 72)
-                        .shadow(radius: 8)
-                    
-                    Image(systemName: "plus")
-                        .font(.system(size: 30, weight: .bold))
-                        .foregroundStyle(.white)
-                }
+        Button {
+            // NEXT ITERATION: present a real add-task sheet.
+            showingAddSheet = true
+        } label: {
+            Image(systemName: "plus")
+                .font(.system(size: 30, weight: .bold))
+                .padding(22)
+        }
+        .buttonStyle(.plain)
+        .glassEffect(
+            .regular.tint(oracleAccent),
+            in: Circle()
+        )
+        .padding(.bottom, 24)
+        .frame(maxWidth: .infinity, alignment: .center)
+        .sheet(isPresented: $showingAddSheet) {
+            // Placeholder for now – just UI.
+            VStack(spacing: 12) {
+                Text("Add Task")
+                    .font(.title2.weight(.semibold))
+                Text("Next step we’ll connect this to your Quick Dump Inbox and folders.")
+                    .font(.body)
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.secondary)
             }
-            .padding(.trailing, 24)
-            .padding(.bottom, 24)
-            .sheet(isPresented: $showingAddSheet) {
-                // Placeholder for now – will become AddTaskView soon.
-                Text("Add Task Coming Soon")
-                    .font(.title2)
-                    .padding()
-            }
+            .padding()
         }
     }
 }
 
-// MARK: - Reusable Rows
+// MARK: - Focus Zone Card (ONE task + 3 steps)
 
-/// Little rounded card used for each announcement row.
-struct AnnouncementRow: View {
-    let icon: String
+struct FocusZoneCard: View {
     let title: String
+    let steps: [String]
     
     var body: some View {
-        HStack(spacing: 12) {
-            Text(icon)
-                .font(.title3)
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                HStack(spacing: 8) {
+                    Text("FOCUS ZONE")
+                        .font(.caption.weight(.semibold))
+                        .textCase(.uppercase)
+                        .foregroundStyle(.secondary)
+                    
+                    Text("🔮")
+                        .font(.caption)
+                }
+                
+                Spacer()
+                
+                // Random task button – logic comes later
+                Button {
+                    // LATER:
+                    //  - Randomly pick another task from your list
+                    //  - Update the focus task + steps
+                } label: {
+                    Label("Random task", systemImage: "dice")
+                        .labelStyle(.iconOnly)
+                        .font(.system(size: 18, weight: .semibold))
+                }
+                .buttonStyle(.plain)
+            }
             
+            // The ONE task
             Text(title)
-                .font(.body)
+                .font(.title3.weight(.semibold))
             
-            Spacer()
+            // 3 tiny starter steps
+            VStack(alignment: .leading, spacing: 10) {
+                ForEach(Array(steps.enumerated()), id: \.offset) { index, step in
+                    HStack(alignment: .top, spacing: 10) {
+                        ZStack {
+                            Circle()
+                                .fill(Color.white.opacity(0.7))
+                                .frame(width: 22, height: 22)
+                            Text("\(index + 1)")
+                                .font(.caption.weight(.bold))
+                                .foregroundStyle(.primary)
+                        }
+                        
+                        Text(step)
+                            .font(.subheadline)
+                            .foregroundStyle(.primary)
+                    }
+                    .padding(10)
+                    .glassEffect(
+                        .regular.tint(Color.white.opacity(0.65)),
+                        in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    )
+                }
+            }
             
-            Image(systemName: "chevron.right")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(.secondary)
+            // Future Apple Intelligence hook
+            Button {
+                // FUTURE:
+                // Use Apple Intelligence / Foundation Models here to:
+                //  - Send `title` to the model
+                //  - Get back the 3 smallest first steps
+                //  - Update `steps` state in HomeView
+            } label: {
+                Label("Let Oracle find first 3 steps", systemImage: "sparkles")
+                    .font(.subheadline.weight(.semibold))
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 4)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 14)
-        .background(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(Color(.systemBackground))
-                .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 4)
+        .padding(20)
+        .glassEffect(
+            .regular.tint(oracleAccent.opacity(0.8)),
+            in: RoundedRectangle(cornerRadius: 26, style: .continuous)
         )
     }
 }
 
-/// Social-style folder row (icon + name + task count)
+// MARK: - Quick Dump Inbox (bottom-half capture)
+
+struct QuickDumpInboxView: View {
+    @Binding var text: String
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Quick Dump Inbox")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.secondary)
+            
+            HStack(alignment: .top, spacing: 12) {
+                TextField("Type the thing that just popped into your head…",
+                          text: $text,
+                          axis: .vertical)
+                    .textFieldStyle(.plain)
+                    .font(.body)
+                    .lineLimit(1...3)
+                
+                Button {
+                    // NEXT ITERATION:
+                    //  - Parse natural language for dates/alarms
+                    //  - Add as a new task in an Inbox folder via TaskStore
+                    text = ""
+                } label: {
+                    Image(systemName: "arrow.up.circle.fill")
+                        .font(.system(size: 24, weight: .semibold))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(18)
+        .glassEffect(
+            .regular.tint(oracleAccent.opacity(0.55)),
+            in: RoundedRectangle(cornerRadius: 22, style: .continuous)
+        )
+    }
+}
+
+// MARK: - Folder Row (Other tasks / lists)
+
 struct FolderRow: View {
     let folder: Folder
     let taskCount: Int
@@ -173,8 +297,8 @@ struct FolderRow: View {
         HStack(spacing: 12) {
             ZStack {
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(folder.accentColor.opacity(0.2))
-                    .frame(width: 36, height: 36)
+                    .fill(folder.accentColor.opacity(0.14))
+                    .frame(width: 38, height: 38)
                 
                 Image(systemName: folder.symbolName)
                     .font(.system(size: 18, weight: .semibold))
@@ -192,10 +316,9 @@ struct FolderRow: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
-        .background(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(Color(.systemBackground))
-                .shadow(color: Color.black.opacity(0.04), radius: 6, x: 0, y: 3)
+        .glassEffect(
+            .regular.tint(Color.white.opacity(0.6)),
+            in: RoundedRectangle(cornerRadius: 22, style: .continuous)
         )
     }
 }
@@ -209,10 +332,4 @@ struct HomeView_Previews: PreviewProvider {
             .environmentObject(store)
     }
 }
-//
-//  HomeView.swift
-//  Oracle
-//
-//  Created by Matt Lieder on 11/21/25.
-//
 
