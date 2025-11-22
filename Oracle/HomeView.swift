@@ -8,9 +8,10 @@ struct HomeView: View {
     
     @State private var showingAddSheet = false
     
-    // New: simple inbox tasks stored in this view for now
+    // Inbox state (local for now)
     @State private var inboxTasks: [InboxTask] = []
     @State private var newTaskTitle: String = ""
+    @State private var newTaskPriority: TaskPriority = .medium
     
     // For now, this is a placeholder "one" task and steps.
     // Later we’ll wire this up to real data + Apple Intelligence.
@@ -105,7 +106,6 @@ private extension HomeView {
                 .font(.headline)
                 .foregroundStyle(.secondary)
             
-            // Now we pass real tasks instead of []
             InboxCardView(items: inboxTasks)
         }
     }
@@ -116,7 +116,6 @@ private extension HomeView {
 private extension HomeView {
     var floatingAddButton: some View {
         Button {
-            // Show add-task sheet
             showingAddSheet = true
         } label: {
             Image(systemName: "plus")
@@ -127,20 +126,27 @@ private extension HomeView {
         .sheet(isPresented: $showingAddSheet) {
             AddInboxTaskSheet(
                 title: $newTaskTitle,
-                onAdd: { title in
-                    // Trim and validate
+                selectedPriority: $newTaskPriority,
+                onAddToFocus: { title, priority in
                     let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
                     guard !trimmed.isEmpty else { return }
                     
-                    // Append a new inbox task
-                    inboxTasks.append(InboxTask(title: trimmed))
+                    // Add to inbox
+                    inboxTasks.append(
+                        InboxTask(title: trimmed, priority: priority)
+                    )
                     
-                    // Reset and dismiss
+                    // Make it the current Focus Zone task
+                    focusTaskTitle = trimmed
+                    
+                    // Reset + dismiss
                     newTaskTitle = ""
+                    newTaskPriority = .medium
                     showingAddSheet = false
                 },
                 onCancel: {
                     newTaskTitle = ""
+                    newTaskPriority = .medium
                     showingAddSheet = false
                 }
             )
@@ -236,7 +242,7 @@ struct FocusZoneCard: View {
 // MARK: - Inbox Card (one glass box with items inside)
 
 struct InboxCardView: View {
-    let items: [InboxTask]   // now uses InboxTask
+    let items: [InboxTask]
     
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -302,15 +308,13 @@ struct InboxItemRow: View {
     
     var body: some View {
         HStack(spacing: 12) {
-            // Simple circular “checkbox” style icon
             ZStack {
-                Circle()
-                    .fill(Color.white.opacity(0.8))
-                    .frame(width: 26, height: 26)
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(task.priority.color.opacity(0.18))
+                    .frame(width: 32, height: 32)
                 
-                Image(systemName: task.isCompleted ? "checkmark" : "circle")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(task.isCompleted ? oracleAccent : .secondary)
+                Text(task.priority.emoji)
+                    .font(.system(size: 18))
             }
             
             Text(task.title)
@@ -323,55 +327,167 @@ struct InboxItemRow: View {
     }
 }
 
-// MARK: - Add Task Sheet
+// MARK: - Add Task Sheet (card-style)
 
 struct AddInboxTaskSheet: View {
     @Binding var title: String
-    let onAdd: (String) -> Void
+    @Binding var selectedPriority: TaskPriority
+    let onAddToFocus: (String, TaskPriority) -> Void
     let onCancel: () -> Void
     
     var body: some View {
-        NavigationStack {
-            VStack(alignment: .leading, spacing: 16) {
-                Text("Quick add to Inbox")
-                    .font(.title2.weight(.semibold))
+        ZStack {
+            Color(.systemBackground)
+                .opacity(0.9)
+                .ignoresSafeArea()
+            
+            VStack {
+                Spacer(minLength: 0)
                 
-                Text("Type the thing that just popped into your mind. We’ll save it so you don’t have to remember it.")
-                    .font(.body)
-                    .foregroundStyle(.secondary)
-                
-                TextField("Write the thing here…", text: $title)
-                    .textFieldStyle(.roundedBorder)
-                    .padding(.top, 4)
-                
-                Spacer()
-            }
-            .padding()
-            .navigationTitle("New Inbox Item")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        onCancel()
+                VStack(alignment: .leading, spacing: 16) {
+                    // Header row
+                    HStack {
+                        Text("Add task")
+                            .font(.title2.weight(.semibold))
+                        
+                        Spacer()
+                        
+                        Button {
+                            onCancel()
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 16, weight: .semibold))
+                                .padding(8)
+                        }
+                        .buttonStyle(.plain)
                     }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Add") {
-                        onAdd(title)
+                    
+                    // Task title field
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Task")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        TextField("Morning check-in…", text: $title)
+                            .textFieldStyle(.roundedBorder)
                     }
+                    
+                    // Priority chips
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Priority")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        
+                        HStack(spacing: 8) {
+                            ForEach(TaskPriority.allCases) { priority in
+                                Button {
+                                    selectedPriority = priority
+                                } label: {
+                                    HStack(spacing: 6) {
+                                        Text(priority.emoji)
+                                        Text(priority.label)
+                                    }
+                                    .font(.footnote.weight(.medium))
+                                    .padding(.vertical, 8)
+                                    .padding(.horizontal, 12)
+                                    .background(
+                                        Capsule()
+                                            .fill(
+                                                priority == selectedPriority
+                                                ? oracleAccent.opacity(0.22)
+                                                : Color.white.opacity(0.9)
+                                            )
+                                    )
+                                    .overlay(
+                                        Capsule()
+                                            .stroke(
+                                                priority == selectedPriority
+                                                ? oracleAccent.opacity(0.7)
+                                                : Color.clear,
+                                                lineWidth: 1
+                                            )
+                                    )
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                    
+                    // Big CTA button
+                    Button {
+                        onAddToFocus(title, selectedPriority)
+                    } label: {
+                        HStack {
+                            Spacer()
+                            Text("Add to Focus Zone")
+                            Image(systemName: "arrow.right")
+                            Spacer()
+                        }
+                        .font(.body.weight(.semibold))
+                        .padding(.vertical, 12)
+                    }
+                    .background(
+                        Capsule()
+                            .fill(Color.black)
+                    )
+                    .foregroundStyle(Color.white)
+                    .padding(.top, 8)
                     .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
+                .padding(20)
+                .background(
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .fill(Color.white)
+                )
+                .padding(.horizontal, 16)
+                .padding(.bottom, 24)
             }
         }
     }
 }
 
-// MARK: - Simple Inbox Task Model
+// MARK: - Simple Inbox Task Model + Priority
 
 struct InboxTask: Identifiable, Hashable {
     let id = UUID()
     var title: String
     var isCompleted: Bool = false
+    var priority: TaskPriority = .medium
+}
+
+enum TaskPriority: String, CaseIterable, Identifiable {
+    case low
+    case medium
+    case high
+    case urgent
+    
+    var id: String { rawValue }
+    
+    var label: String {
+        switch self {
+        case .low: return "Low"
+        case .medium: return "Medium"
+        case .high: return "High"
+        case .urgent: return "Urgent"
+        }
+    }
+    
+    var emoji: String {
+        switch self {
+        case .low: return "🫧"
+        case .medium: return "🙂"
+        case .high: return "🔥"
+        case .urgent: return "💀"
+        }
+    }
+    
+    var color: Color {
+        switch self {
+        case .low: return .green
+        case .medium: return .blue
+        case .high: return .orange
+        case .urgent: return .red
+        }
+    }
 }
 
 // MARK: - Liquid Glass Circular Button Style
