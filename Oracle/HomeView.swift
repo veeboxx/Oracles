@@ -231,8 +231,7 @@ struct FocusZoneCard: View {
             
             // Future Apple Intelligence hook
             Button {
-                // FUTURE:
-                // Use Apple Intelligence / Foundation Models here
+                // FUTURE AI integration
             } label: {
                 Label("Let Oracle find first 3 steps", systemImage: "sparkles")
                     .font(.subheadline.weight(.semibold))
@@ -346,7 +345,6 @@ struct AddInboxTaskSheet: View {
     let onCancel: () -> Void
     
     @FocusState private var isTitleFocused: Bool
-    @State private var gradientPhase: Double = 0
     
     var body: some View {
         ZStack {
@@ -355,7 +353,8 @@ struct AddInboxTaskSheet: View {
                 .ignoresSafeArea()
             
             VStack {
-                Spacer(minLength: 80)   // smaller spacer so card sits higher
+                // smaller spacer so card sits higher, less white above
+                Spacer(minLength: 24)
                 
                 VStack(alignment: .leading, spacing: 20) {
                     // Header row
@@ -392,13 +391,13 @@ struct AddInboxTaskSheet: View {
                         }
                     }
                     
-                    // Priority chips – emoji only
+                    // Priority chips – emoji only, 5 options
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Priority")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         
-                        HStack(spacing: 10) {
+                        HStack(spacing: 14) {
                             ForEach(TaskPriority.allCases) { priority in
                                 Button {
                                     selectedPriority = priority
@@ -428,6 +427,7 @@ struct AddInboxTaskSheet: View {
                                 .buttonStyle(.plain)
                             }
                         }
+                        .frame(maxWidth: .infinity, alignment: .center) // center & evenly space
                     }
                     
                     // Two big buttons
@@ -438,23 +438,18 @@ struct AddInboxTaskSheet: View {
                         } label: {
                             HStack {
                                 Spacer()
-                                Text("Add to Focus Zone")
+                                
+                                Text("Add to ")
                                     .font(.body.weight(.semibold))
-                                    .foregroundStyle(
-                                        LinearGradient(
-                                            colors: [
-                                                Color.white,
-                                                oracleAccent,
-                                                Color.white
-                                            ],
-                                            startPoint: .leading,
-                                            endPoint: .trailing
-                                        )
-                                    )
-
-
+                                    .foregroundColor(.white)
+                                
+                                Text("Focus Zone")
+                                    .font(.body.weight(.semibold))
+                                    .foregroundColor(oracleAccent)
+                                
                                 Image(systemName: "arrow.right")
-                                    .foregroundStyle(Color.white)
+                                    .foregroundColor(.white)
+                                
                                 Spacer()
                             }
                             .padding(.vertical, 12)
@@ -495,20 +490,14 @@ struct AddInboxTaskSheet: View {
                 )
                 .padding(.horizontal, 16)
                 .padding(.bottom, 24)
+                
+                Spacer(minLength: 0)
             }
         }
         .onAppear {
-            // Autofocus the keyboard
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            // Autofocus the keyboard – slightly longer delay helps on sheets
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                 isTitleFocused = true
-            }
-            
-            // Swirling / shifting gradient for Focus Zone text
-            withAnimation(
-                .linear(duration: 5)
-                    .repeatForever(autoreverses: false)
-            ) {
-                gradientPhase = 360
             }
         }
     }
@@ -524,6 +513,7 @@ struct InboxTask: Identifiable, Hashable {
 }
 
 enum TaskPriority: String, CaseIterable, Identifiable {
+    case chill
     case low
     case medium
     case high
@@ -533,18 +523,20 @@ enum TaskPriority: String, CaseIterable, Identifiable {
     
     var emoji: String {
         switch self {
-        case .low: return "🫧"
+        case .chill:  return "😌"
+        case .low:    return "🫧"
         case .medium: return "🙂"
-        case .high: return "🔥"
+        case .high:   return "🔥"
         case .urgent: return "💀"
         }
     }
     
     var color: Color {
         switch self {
-        case .low: return .green
+        case .chill:  return .gray
+        case .low:    return .green
         case .medium: return .blue
-        case .high: return .orange
+        case .high:   return .orange
         case .urgent: return .red
         }
     }
