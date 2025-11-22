@@ -144,6 +144,18 @@ private extension HomeView {
                     newTaskPriority = .medium
                     showingAddSheet = false
                 },
+                onAddToInbox: { title, priority in
+                    let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !trimmed.isEmpty else { return }
+                    
+                    inboxTasks.append(
+                        InboxTask(title: trimmed, priority: priority)
+                    )
+                    
+                    newTaskTitle = ""
+                    newTaskPriority = .medium
+                    showingAddSheet = false
+                },
                 onCancel: {
                     newTaskTitle = ""
                     newTaskPriority = .medium
@@ -220,10 +232,7 @@ struct FocusZoneCard: View {
             // Future Apple Intelligence hook
             Button {
                 // FUTURE:
-                // Use Apple Intelligence / Foundation Models here to:
-                //  - Send `title` to the model
-                //  - Get back the 3 smallest first steps
-                //  - Update `steps` state in HomeView
+                // Use Apple Intelligence / Foundation Models here
             } label: {
                 Label("Let Oracle find first 3 steps", systemImage: "sparkles")
                     .font(.subheadline.weight(.semibold))
@@ -327,13 +336,17 @@ struct InboxItemRow: View {
     }
 }
 
-// MARK: - Add Task Sheet (card-style)
+// MARK: - Add Task Sheet (card-style, refined)
 
 struct AddInboxTaskSheet: View {
     @Binding var title: String
     @Binding var selectedPriority: TaskPriority
     let onAddToFocus: (String, TaskPriority) -> Void
+    let onAddToInbox: (String, TaskPriority) -> Void
     let onCancel: () -> Void
+    
+    @FocusState private var isTitleFocused: Bool
+    @State private var gradientPhase: Double = 0
     
     var body: some View {
         ZStack {
@@ -342,9 +355,9 @@ struct AddInboxTaskSheet: View {
                 .ignoresSafeArea()
             
             VStack {
-                Spacer(minLength: 0)
+                Spacer(minLength: 80)   // smaller spacer so card sits higher
                 
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 20) {
                     // Header row
                     HStack {
                         Text("Add task")
@@ -362,76 +375,118 @@ struct AddInboxTaskSheet: View {
                         .buttonStyle(.plain)
                     }
                     
-                    // Task title field
-                    VStack(alignment: .leading, spacing: 8) {
+                    // Task title field (underline style)
+                    VStack(alignment: .leading, spacing: 4) {
                         Text("Task")
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                        TextField("Morning check-in…", text: $title)
-                            .textFieldStyle(.roundedBorder)
+                        
+                        VStack(spacing: 2) {
+                            TextField("Type task here…", text: $title)
+                                .textFieldStyle(.plain)
+                                .focused($isTitleFocused)
+                            
+                            Rectangle()
+                                .frame(height: 1)
+                                .foregroundColor(Color.gray.opacity(0.25))
+                        }
                     }
                     
-                    // Priority chips
+                    // Priority chips – emoji only
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Priority")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         
-                        HStack(spacing: 8) {
+                        HStack(spacing: 10) {
                             ForEach(TaskPriority.allCases) { priority in
                                 Button {
                                     selectedPriority = priority
                                 } label: {
-                                    HStack(spacing: 6) {
-                                        Text(priority.emoji)
-                                        Text(priority.label)
-                                    }
-                                    .font(.footnote.weight(.medium))
-                                    .padding(.vertical, 8)
-                                    .padding(.horizontal, 12)
-                                    .background(
-                                        Capsule()
-                                            .fill(
-                                                priority == selectedPriority
-                                                ? oracleAccent.opacity(0.22)
-                                                : Color.white.opacity(0.9)
-                                            )
-                                    )
-                                    .overlay(
-                                        Capsule()
-                                            .stroke(
-                                                priority == selectedPriority
-                                                ? oracleAccent.opacity(0.7)
-                                                : Color.clear,
-                                                lineWidth: 1
-                                            )
-                                    )
+                                    Text(priority.emoji)
+                                        .font(.system(size: 20))
+                                        .padding(.vertical, 8)
+                                        .padding(.horizontal, 12)
+                                        .background(
+                                            Capsule()
+                                                .fill(
+                                                    priority == selectedPriority
+                                                    ? oracleAccent.opacity(0.22)
+                                                    : Color.white.opacity(0.9)
+                                                )
+                                        )
+                                        .overlay(
+                                            Capsule()
+                                                .stroke(
+                                                    priority == selectedPriority
+                                                    ? oracleAccent.opacity(0.7)
+                                                    : Color.clear,
+                                                    lineWidth: 1
+                                                )
+                                        )
                                 }
                                 .buttonStyle(.plain)
                             }
                         }
                     }
                     
-                    // Big CTA button
-                    Button {
-                        onAddToFocus(title, selectedPriority)
-                    } label: {
-                        HStack {
-                            Spacer()
-                            Text("Add to Focus Zone")
-                            Image(systemName: "arrow.right")
-                            Spacer()
+                    // Two big buttons
+                    VStack(spacing: 10) {
+                        // Add to Focus Zone
+                        Button {
+                            onAddToFocus(title, selectedPriority)
+                        } label: {
+                            HStack {
+                                Spacer()
+                                Text("Add to Focus Zone")
+                                    .font(.body.weight(.semibold))
+                                    .foregroundStyle(
+                                        LinearGradient(
+                                            colors: [
+                                                Color.white,
+                                                oracleAccent,
+                                                Color.white
+                                            ],
+                                            startPoint: .leading,
+                                            endPoint: .trailing
+                                        )
+                                    )
+
+
+                                Image(systemName: "arrow.right")
+                                    .foregroundStyle(Color.white)
+                                Spacer()
+                            }
+                            .padding(.vertical, 12)
                         }
-                        .font(.body.weight(.semibold))
-                        .padding(.vertical, 12)
+                        .background(
+                            Capsule()
+                                .fill(Color.black)
+                        )
+                        .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        
+                        // Add to Inbox
+                        Button {
+                            onAddToInbox(title, selectedPriority)
+                        } label: {
+                            HStack {
+                                Spacer()
+                                Text("Add to Inbox")
+                                    .font(.body.weight(.semibold))
+                                Spacer()
+                            }
+                            .padding(.vertical, 11)
+                        }
+                        .background(
+                            Capsule()
+                                .fill(Color.white)
+                        )
+                        .overlay(
+                            Capsule()
+                                .stroke(Color.black.opacity(0.12), lineWidth: 1)
+                        )
                     }
-                    .background(
-                        Capsule()
-                            .fill(Color.black)
-                    )
-                    .foregroundStyle(Color.white)
-                    .padding(.top, 8)
-                    .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .padding(.top, 4)
                 }
                 .padding(20)
                 .background(
@@ -440,6 +495,20 @@ struct AddInboxTaskSheet: View {
                 )
                 .padding(.horizontal, 16)
                 .padding(.bottom, 24)
+            }
+        }
+        .onAppear {
+            // Autofocus the keyboard
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                isTitleFocused = true
+            }
+            
+            // Swirling / shifting gradient for Focus Zone text
+            withAnimation(
+                .linear(duration: 5)
+                    .repeatForever(autoreverses: false)
+            ) {
+                gradientPhase = 360
             }
         }
     }
@@ -461,15 +530,6 @@ enum TaskPriority: String, CaseIterable, Identifiable {
     case urgent
     
     var id: String { rawValue }
-    
-    var label: String {
-        switch self {
-        case .low: return "Low"
-        case .medium: return "Medium"
-        case .high: return "High"
-        case .urgent: return "Urgent"
-        }
-    }
     
     var emoji: String {
         switch self {
