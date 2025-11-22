@@ -7,7 +7,6 @@ struct HomeView: View {
     @EnvironmentObject var store: TaskStore
     
     @State private var showingAddSheet = false
-    @State private var quickDumpText: String = ""
     
     // For now, this is a placeholder "one" task and steps.
     // Later we’ll wire this up to real data + Apple Intelligence.
@@ -42,7 +41,7 @@ struct HomeView: View {
                             steps: starterSteps
                         )
                         
-                        otherTasksSection
+                        inboxSection
                     }
                     .padding(.horizontal, 20)
                     .padding(.top, 24)
@@ -93,38 +92,16 @@ private extension HomeView {
     }
 }
 
-// MARK: - Other Tasks Section
+// MARK: - Inbox Section (bottom half)
 
 private extension HomeView {
-    var otherTasksSection: some View {
+    var inboxSection: some View {
         VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Text("Other Tasks")
-                    .font(.headline)
-                
-                Spacer()
-                
-                Menu {
-                    // NEXT: hook these up to real sorting
-                    Button("By Created Date") {}
-                    Button("By Priority") {}
-                    Button("Alphabetical") {}
-                } label: {
-                    Label("Sort", systemImage: "arrow.up.arrow.down.circle")
-                        .labelStyle(.iconOnly)
-                        .font(.system(size: 20, weight: .semibold))
-                }
-                .foregroundStyle(.primary)
-            }
-            .foregroundStyle(.secondary)
+            Text("Inbox")
+                .font(.headline)
+                .foregroundStyle(.secondary)
             
-            QuickDumpInboxView(text: $quickDumpText)
-            
-            VStack(spacing: 12) {
-                ForEach(Array(store.folders.enumerated()), id: \.element.id) { _, folder in
-                    FolderRow(folder: folder, taskCount: folder.openTaskCount)
-                }
-            }
+            InboxCardView(items: store.folders) // using folders as “inbox items” for now
         }
     }
 }
@@ -134,7 +111,9 @@ private extension HomeView {
 private extension HomeView {
     var floatingAddButton: some View {
         Button {
-            // NEXT ITERATION: present a real add-task sheet.
+            // NEXT ITERATION:
+            // - Present a real Add Task sheet
+            // - Add directly to the Inbox
             showingAddSheet = true
         } label: {
             Image(systemName: "plus")
@@ -145,9 +124,9 @@ private extension HomeView {
         .sheet(isPresented: $showingAddSheet) {
             // Placeholder for now – just UI.
             VStack(spacing: 12) {
-                Text("Add Task")
+                Text("Add to Inbox")
                     .font(.title2.weight(.semibold))
-                Text("Next step we’ll connect this to your Quick Dump Inbox and folders.")
+                Text("Next step we’ll connect this to your Inbox so new tasks land here automatically.")
                     .font(.body)
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.secondary)
@@ -156,35 +135,6 @@ private extension HomeView {
         }
     }
 }
-// MARK: - Liquid Glass Circular Button Style
-
-struct GlassCircleButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: 30, weight: .bold))
-            .frame(width: 72, height: 72)
-            .glassEffect(
-                // .regular is the standard Liquid Glass material
-                .regular.tint(oracleAccent.opacity(0.1)),
-                in: Circle()
-            )
-            // subtle edge highlight so it feels like a puck
-            .overlay(
-                Circle()
-                    .strokeBorder(Color.white.opacity(0.65), lineWidth: 1.2)
-            )
-            // soft shadow so it “floats”
-            .shadow(color: Color.black.opacity(0.16), radius: 10, x: 0, y: 6)
-            // press feedback
-            .scaleEffect(configuration.isPressed ? 0.94 : 1.0)
-            .opacity(configuration.isPressed ? 0.92 : 1.0)
-            .animation(
-                .spring(response: 0.25, dampingFraction: 0.7),
-                value: configuration.isPressed
-            )
-    }
-}
-
 
 // MARK: - Focus Zone Card (ONE task + 3 steps)
 
@@ -271,78 +221,145 @@ struct FocusZoneCard: View {
     }
 }
 
-// MARK: - Quick Dump Inbox (bottom-half capture)
+// MARK: - Inbox Card (one glass box with items inside)
 
-struct QuickDumpInboxView: View {
-    @Binding var text: String
+struct InboxCardView: View {
+    let items: [Folder]   // for now we reuse Folder as “inbox items”
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Quick Dump Inbox")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.secondary)
-            
-            HStack(alignment: .top, spacing: 12) {
-                TextField("Type the thing that just popped into your head…",
-                          text: $text,
-                          axis: .vertical)
-                    .textFieldStyle(.plain)
-                    .font(.body)
-                    .lineLimit(1...3)
+        VStack(alignment: .leading, spacing: 0) {
+            // Header row inside the card
+            HStack {
+                Text("Inbox")
+                    .font(.subheadline.weight(.semibold))
                 
-                Button {
-                    // NEXT ITERATION:
-                    //  - Parse natural language for dates/alarms
-                    //  - Add as a new task in an Inbox folder via TaskStore
-                    text = ""
+                Spacer()
+                
+                Menu {
+                    // NEXT: hook these up to real sorting
+                    Button("By Created Date") {}
+                    Button("By Priority") {}
+                    Button("Alphabetical") {}
                 } label: {
-                    Image(systemName: "arrow.up.circle.fill")
-                        .font(.system(size: 24, weight: .semibold))
+                    Image(systemName: "arrow.up.arrow.down.circle")
+                        .font(.system(size: 18, weight: .semibold))
                 }
                 .buttonStyle(.plain)
             }
+            .padding(.bottom, 8)
+            
+            if items.isEmpty {
+                Text("Nothing here yet. Tap + to add your first task.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .padding(.top, 4)
+            } else {
+                ForEach(Array(items.enumerated()), id: \.element.id) { index, folder in
+                    InboxItemRow(folder: folder)
+                        .padding(.vertical, 10)
+                    
+                    if index != items.count - 1 {
+                        Divider()
+                            .overlay(Color.white.opacity(0.18))
+                    }
+                }
+            }
         }
-        .padding(18)
+        .padding(16)
         .glassEffect(
-            .regular.tint(oracleAccent.opacity(0.55)),
+            .regular.tint(Color.white.opacity(0.55)),
             in: RoundedRectangle(cornerRadius: 22, style: .continuous)
         )
     }
 }
 
-// MARK: - Folder Row (Other tasks / lists)
+// MARK: - One row inside the Inbox card
 
-struct FolderRow: View {
+struct InboxItemRow: View {
     let folder: Folder
-    let taskCount: Int
     
     var body: some View {
         HStack(spacing: 12) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(folder.accentColor.opacity(0.14))
-                    .frame(width: 38, height: 38)
-                
-                Image(systemName: folder.symbolName)
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(folder.accentColor)
-            }
+            ZstackIcon(color: folder.accentColor, systemName: folder.symbolName)
             
             Text(folder.name)
                 .font(.body)
             
             Spacer()
             
-            Text("\(taskCount)")
+            Text("\(folder.openTaskCount)")
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.secondary)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 14)
-        .glassEffect(
-            .regular.tint(Color.white.opacity(0.6)),
-            in: RoundedRectangle(cornerRadius: 22, style: .continuous)
-        )
+    }
+}
+
+// Small helper for the icon in each row
+struct ZstackIcon: View {
+    let color: Color
+    let systemName: String
+    
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(color.opacity(0.18))
+                .frame(width: 36, height: 36)
+            
+            Image(systemName: systemName)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(color)
+        }
+    }
+}
+
+// MARK: - Liquid Glass Circular Button Style
+
+struct GlassCircleButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 30, weight: .bold))
+            .frame(width: 72, height: 72)
+            .glassEffect(
+                .regular.tint(oracleAccent.opacity(0.1)),
+                in: Circle()
+            )
+            // inner subtle edge for depth
+            .overlay(
+                Circle()
+                    .stroke(Color.black.opacity(0.03), lineWidth: 0.8)
+                    .blur(radius: 0.6)
+            )
+            // bright crisp main edge
+            .overlay(
+                Circle()
+                    .strokeBorder(Color.white.opacity(0.65), lineWidth: 1.2)
+            )
+            // ✨ top rim light (halo highlight)
+            .overlay(
+                Circle()
+                    .stroke(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.35),   // top highlight
+                                Color.white.opacity(0.00)    // fades down
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        ),
+                        lineWidth: 3
+                    )
+                    .blur(radius: 1.2)
+            )
+            // deeper downward shadow + magical glow
+            .shadow(color: Color.black.opacity(0.22), radius: 14, x: 0, y: 10)   // stronger drop shadow
+            .shadow(color: oracleAccent.opacity(0.40), radius: 26, x: 0, y: 0)   // magical purple glow
+            // press animation
+            .scaleEffect(configuration.isPressed ? 0.94 : 1.0)
+            .opacity(configuration.isPressed ? 0.90 : 1.0)
+            .animation(
+                .spring(response: 0.25, dampingFraction: 0.7),
+                value: configuration.isPressed
+            )
     }
 }
 
