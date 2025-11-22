@@ -1,103 +1,123 @@
 import SwiftUI
 import Combine
 
-// MARK: - Basic To-Do Item
+// MARK: - Task Priority
 
-/// A single to-do task inside a folder.
-struct TaskItem: Identifiable {
-    let id = UUID()
+enum TaskPriority: String, CaseIterable, Identifiable, Codable {
+    case chill
+    case low
+    case medium
+    case high
+    case urgent
+
+    var id: String { rawValue }
+
+    var emoji: String {
+        switch self {
+        case .chill:  return "😌"
+        case .low:    return "🫧"
+        case .medium: return "🙂"
+        case .high:   return "🔥"
+        case .urgent: return "💀"
+        }
+    }
+    var color: Color {
+        switch self {
+        case .chill:  return .gray
+        case .low:    return .green
+        case .medium: return .blue
+        case .high:   return .orange
+        case .urgent: return .red
+        }
+    }
+
+}
+
+// MARK: - Task Status
+
+enum TaskStatus: String, Codable {
+    case inbox
+    case focus
+    case completed
+}
+
+// MARK: - Task Model
+
+struct TaskItem: Identifiable, Codable, Hashable {
+    let id: UUID
     var title: String
-    var isDone: Bool = false
-}
+    var notes: String?
+    var priority: TaskPriority
+    var status: TaskStatus
+    var createdAt: Date
+    var dueDate: Date?
 
-// MARK: - Folder Model
-
-/// A folder holds related tasks (like "Instagram", "YouTube", etc.).
-struct Folder: Identifiable {
-    let id = UUID()
-    var name: String
-    var symbolName: String   // SF Symbol name for the icon
-    var accentColor: Color
-    var tasks: [TaskItem] = []
-    
-    /// Number of incomplete tasks.
-    var openTaskCount: Int {
-        tasks.filter { !$0.isDone }.count
+    init(
+        id: UUID = UUID(),
+        title: String,
+        notes: String? = nil,
+        priority: TaskPriority = .medium,
+        status: TaskStatus = .inbox,
+        createdAt: Date = .now,
+        dueDate: Date? = nil
+    ) {
+        self.id = id
+        self.title = title
+        self.notes = notes
+        self.priority = priority
+        self.status = status
+        self.createdAt = createdAt
+        self.dueDate = dueDate
     }
 }
 
-// MARK: - Central Store (Object-Oriented data manager)
+// MARK: - Task Store (single source of truth)
 
-/// This class owns all your folders and tasks.
-/// Views will observe this so the UI updates automatically.
 final class TaskStore: ObservableObject {
-    
-    /// All folders the app knows about.
-    @Published var folders: [Folder]
-    
-    init() {
-        // Start with some example folders, like in your screenshot.
-        self.folders = [
-            Folder(
-                name: "Instagram",
-                symbolName: "camera.fill",
-                accentColor: Color.purple.opacity(0.9),
-                tasks: []
-            ),
-            Folder(
-                name: "X (Twitter)",
-                symbolName: "xmark",
-                accentColor: Color.blue.opacity(0.9),
-                tasks: []
-            ),
-            Folder(
-                name: "YouTube",
-                symbolName: "play.rectangle.fill",
-                accentColor: Color.red.opacity(0.9),
-                tasks: []
-            ),
-            Folder(
-                name: "Facebook",
-                symbolName: "f.cursive",
-                accentColor: Color.blue.opacity(0.9),
-                tasks: []
-            ),
-            Folder(
-                name: "Reddit",
-                symbolName: "bubble.left.and.bubble.right.fill",
-                accentColor: Color.orange.opacity(0.9),
-                tasks: []
-            ),
-            Folder(
-                name: "LinkedIn",
-                symbolName: "briefcase.fill",
-                accentColor: Color.cyan.opacity(0.9),
-                tasks: []
-            )
-        ]
+
+    @Published var tasks: [TaskItem]
+
+    /// Default to an **empty** task list – no placeholder tasks.
+    init(tasks: [TaskItem] = []) {
+        self.tasks = tasks
     }
-    
-    // MARK: - Future behavior hooks (we’ll fill these in later)
-    
-    /// Later we’ll use this to add a task to a specific folder.
-    func addTask(title: String, toFolderAt index: Int) {
-        guard folders.indices.contains(index) else { return }
-        let newTask = TaskItem(title: title)
-        folders[index].tasks.append(newTask)
+
+    // MARK: - Computed views on the data
+
+    /// All tasks that live in the inbox, in insertion order.
+    var inboxTasks: [TaskItem] {
+        tasks.filter { $0.status == .inbox }
     }
-    
-    /// Later we’ll use this to toggle a task as done / not done.
-    func toggleTask(withId id: UUID, inFolderAt index: Int) {
-        guard folders.indices.contains(index) else { return }
-        if let taskIndex = folders[index].tasks.firstIndex(where: { $0.id == id }) {
-            folders[index].tasks[taskIndex].isDone.toggle()
+
+    /// The current focus task (first inbox item, if any).
+    var focusTask: TaskItem? {
+        inboxTasks.first
+    }
+
+    // MARK: - Mutating methods
+
+    /// Adds a task to the bottom of the inbox list.
+    func addTaskToInbox(title: String, priority: TaskPriority) {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        let task = TaskItem(title: trimmed, priority: priority, status: .inbox)
+        tasks.append(task)
+    }
+
+    /// Inserts at the **front** of inbox so it becomes the current Focus Zone task.
+    func addTaskAndFocus(title: String, priority: TaskPriority) {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        let task = TaskItem(title: trimmed, priority: priority, status: .inbox)
+        tasks.insert(task, at: 0)
+    }
+
+    func markCompleted(_ task: TaskItem) {
+        if let idx = tasks.firstIndex(of: task) {
+            tasks[idx].status = .completed
         }
     }
 }
-//
-//  Models.swift
-//  Oracle
-//
-//  Created by Matt Lieder on 11/21/25.
-//
 
