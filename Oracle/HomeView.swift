@@ -11,12 +11,16 @@ struct HomeView: View {
     @State private var newTaskTitle: String = ""
     @State private var newTaskPriority: TaskPriority = .medium
 
-    // For now we keep starter steps – these will eventually be AI-generated.
+    // Starter steps – will be replaced by AI-generated ones.
     @State private var starterSteps: [String] = [
         "Open Notes or your doc template",
         "Jot down 3 wins from this week",
         "List one thing that still feels stuck"
     ]
+
+    // Apple Intelligence / Oracle state
+    @State private var isGeneratingSteps = false
+    @State private var aiErrorMessage: String?
 
     var body: some View {
         NavigationStack {
@@ -52,7 +56,7 @@ struct HomeView: View {
                         LinearGradient(
                             gradient: Gradient(stops: [
                                 .init(color: .clear, location: 0.20),   // fully transparent at very top
-                                .init(color: .black, location: 0.45),  // fade in over top ~14%
+                                .init(color: .black, location: 0.45),  // fade in
                                 .init(color: .black, location: 1.0)    // fully visible below
                             ]),
                             startPoint: .top,
@@ -60,14 +64,15 @@ struct HomeView: View {
                         )
                     )
 
-
                     // MARK: - STATIC LAYER (Header + Focus Zone)
                     VStack(alignment: .leading, spacing: 24) {
                         headerSection
 
                         FocusZoneCard(
                             title: focusTaskTitle,
-                            steps: starterSteps
+                            steps: starterSteps,
+                            isGenerating: isGeneratingSteps,
+                            onGenerateSteps: generateStepsForFocusTask
                         )
                     }
                     .padding(.horizontal, 20)
@@ -78,6 +83,16 @@ struct HomeView: View {
                 floatingAddButton
             }
             .navigationBarHidden(true)
+            .alert("Oracle couldn’t help", isPresented: Binding(
+                get: { aiErrorMessage != nil },
+                set: { newValue in
+                    if !newValue { aiErrorMessage = nil }
+                }
+            )) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text(aiErrorMessage ?? "")
+            }
         }
     }
 }
@@ -147,6 +162,35 @@ private extension HomeView {
     }
 }
 
+// MARK: - Apple Intelligence / Oracle logic
+
+private extension HomeView {
+    func generateStepsForFocusTask() {
+        let title = focusTaskTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty else { return }
+
+        isGeneratingSteps = true
+        aiErrorMessage = nil
+
+        Task {
+            do {
+                let steps = try await OracleStepGenerator.shared.generateSteps(for: title)
+                await MainActor.run {
+                    self.starterSteps = steps
+                    self.isGeneratingSteps = false
+                }
+            } catch {
+                await MainActor.run {
+                    self.isGeneratingSteps = false
+                    self.aiErrorMessage =
+                        (error as? LocalizedError)?.errorDescription
+                        ?? "Oracle couldn’t break this task into steps right now."
+                }
+            }
+        }
+    }
+}
+
 // MARK: - Floating Add Button (centered at bottom)
 
 private extension HomeView {
@@ -193,6 +237,8 @@ private extension HomeView {
 struct FocusZoneCard: View {
     let title: String
     let steps: [String]
+    let isGenerating: Bool
+    let onGenerateSteps: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -219,6 +265,7 @@ struct FocusZoneCard: View {
                         .font(.system(size: 18, weight: .semibold))
                 }
                 .buttonStyle(.plain)
+                .disabled(isGenerating)
             }
 
             // The ONE task
@@ -251,14 +298,24 @@ struct FocusZoneCard: View {
             }
 
             Button {
-                // FUTURE:
-                // send title to Apple Intelligence and replace steps with AI-generated ones
+                onGenerateSteps()
             } label: {
-                Label("Let Oracle find first 3 steps", systemImage: "sparkles")
-                    .font(.subheadline.weight(.semibold))
+                if isGenerating {
+                    HStack(spacing: 8) {
+                        ProgressView()
+                            .progressViewStyle(.circular)
+                            .scaleEffect(0.8)
+                        Text("Asking Oracle…")
+                            .font(.subheadline.weight(.semibold))
+                    }
+                } else {
+                    Label("Let Oracle find first 3 steps", systemImage: "sparkles")
+                        .font(.subheadline.weight(.semibold))
+                }
             }
             .buttonStyle(.plain)
             .padding(.top, 4)
+            .disabled(isGenerating)
         }
         .padding(20)
         .glassEffect(
@@ -496,7 +553,7 @@ struct AddInboxTaskSheet: View {
                     .fill(Color.white)
             )
             .padding(.horizontal, 16)
-            .padding(.top, 30)    // top padding = 30 as you wanted
+            .padding(.top, 30)
             .padding(.bottom, 16)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
@@ -564,3 +621,4 @@ struct HomeView_Previews: PreviewProvider {
             .environmentObject(store)
     }
 }
+
