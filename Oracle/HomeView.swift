@@ -138,14 +138,8 @@ private extension HomeView {
             showingAddSheet = true
         } label: {
             Image(systemName: "plus")
-                .font(.system(size: 30, weight: .bold))
-                .padding(22)
         }
-        .buttonStyle(.plain)
-        .glassEffect(
-            .regular.tint(oracleAccent),
-            in: Circle()
-        )
+        .buttonStyle(GlassCircleButtonStyle())
         .padding(.bottom, 24)
         .frame(maxWidth: .infinity, alignment: .center)
         .sheet(isPresented: $showingAddSheet) {
@@ -162,6 +156,35 @@ private extension HomeView {
         }
     }
 }
+// MARK: - Liquid Glass Circular Button Style
+
+struct GlassCircleButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 30, weight: .bold))
+            .frame(width: 72, height: 72)
+            .glassEffect(
+                // .regular is the standard Liquid Glass material
+                .regular.tint(oracleAccent.opacity(0.1)),
+                in: Circle()
+            )
+            // subtle edge highlight so it feels like a puck
+            .overlay(
+                Circle()
+                    .strokeBorder(Color.white.opacity(0.65), lineWidth: 1.2)
+            )
+            // soft shadow so it “floats”
+            .shadow(color: Color.black.opacity(0.16), radius: 10, x: 0, y: 6)
+            // press feedback
+            .scaleEffect(configuration.isPressed ? 0.94 : 1.0)
+            .opacity(configuration.isPressed ? 0.92 : 1.0)
+            .animation(
+                .spring(response: 0.25, dampingFraction: 0.7),
+                value: configuration.isPressed
+            )
+    }
+}
+
 
 // MARK: - Focus Zone Card (ONE task + 3 steps)
 
