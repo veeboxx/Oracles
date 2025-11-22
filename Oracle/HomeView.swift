@@ -8,6 +8,10 @@ struct HomeView: View {
     
     @State private var showingAddSheet = false
     
+    // New: simple inbox tasks stored in this view for now
+    @State private var inboxTasks: [InboxTask] = []
+    @State private var newTaskTitle: String = ""
+    
     // For now, this is a placeholder "one" task and steps.
     // Later we’ll wire this up to real data + Apple Intelligence.
     @State private var focusTaskTitle: String = "Write the weekly progress report"
@@ -101,9 +105,8 @@ private extension HomeView {
                 .font(.headline)
                 .foregroundStyle(.secondary)
             
-            // For now we show an empty inbox state.
-            // Later this will be a real list of tasks.
-            InboxCardView(items: [])
+            // Now we pass real tasks instead of []
+            InboxCardView(items: inboxTasks)
         }
     }
 }
@@ -113,9 +116,7 @@ private extension HomeView {
 private extension HomeView {
     var floatingAddButton: some View {
         Button {
-            // NEXT ITERATION:
-            // - Present a real Add Task sheet
-            // - Add directly to the Inbox
+            // Show add-task sheet
             showingAddSheet = true
         } label: {
             Image(systemName: "plus")
@@ -124,16 +125,25 @@ private extension HomeView {
         .padding(.bottom, 24)
         .frame(maxWidth: .infinity, alignment: .center)
         .sheet(isPresented: $showingAddSheet) {
-            // Placeholder for now – just UI.
-            VStack(spacing: 12) {
-                Text("Add to Inbox")
-                    .font(.title2.weight(.semibold))
-                Text("Next step we’ll connect this to your Inbox so new tasks land here automatically.")
-                    .font(.body)
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(.secondary)
-            }
-            .padding()
+            AddInboxTaskSheet(
+                title: $newTaskTitle,
+                onAdd: { title in
+                    // Trim and validate
+                    let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !trimmed.isEmpty else { return }
+                    
+                    // Append a new inbox task
+                    inboxTasks.append(InboxTask(title: trimmed))
+                    
+                    // Reset and dismiss
+                    newTaskTitle = ""
+                    showingAddSheet = false
+                },
+                onCancel: {
+                    newTaskTitle = ""
+                    showingAddSheet = false
+                }
+            )
         }
     }
 }
@@ -226,7 +236,7 @@ struct FocusZoneCard: View {
 // MARK: - Inbox Card (one glass box with items inside)
 
 struct InboxCardView: View {
-    let items: [Folder]   // later this will be [Task]
+    let items: [InboxTask]   // now uses InboxTask
     
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -266,11 +276,11 @@ struct InboxCardView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
             } else {
-                ForEach(Array(items.enumerated()), id: \.element.id) { index, folder in
-                    InboxItemRow(folder: folder)
+                ForEach(items) { task in
+                    InboxItemRow(task: task)
                         .padding(.vertical, 10)
                     
-                    if index != items.count - 1 {
+                    if task.id != items.last?.id {
                         Divider()
                             .overlay(Color.white.opacity(0.18))
                     }
@@ -285,43 +295,83 @@ struct InboxCardView: View {
     }
 }
 
-// MARK: - One row inside the Inbox card (for future non-empty state)
+// MARK: - One row inside the Inbox card
 
 struct InboxItemRow: View {
-    let folder: Folder
+    let task: InboxTask
     
     var body: some View {
         HStack(spacing: 12) {
-            ZstackIcon(color: folder.accentColor, systemName: folder.symbolName)
+            // Simple circular “checkbox” style icon
+            ZStack {
+                Circle()
+                    .fill(Color.white.opacity(0.8))
+                    .frame(width: 26, height: 26)
+                
+                Image(systemName: task.isCompleted ? "checkmark" : "circle")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(task.isCompleted ? oracleAccent : .secondary)
+            }
             
-            Text(folder.name)
+            Text(task.title)
                 .font(.body)
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
             
             Spacer()
-            
-            Text("\(folder.openTaskCount)")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.secondary)
         }
     }
 }
 
-// Small helper for the icon in each row
-struct ZstackIcon: View {
-    let color: Color
-    let systemName: String
+// MARK: - Add Task Sheet
+
+struct AddInboxTaskSheet: View {
+    @Binding var title: String
+    let onAdd: (String) -> Void
+    let onCancel: () -> Void
     
     var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(color.opacity(0.18))
-                .frame(width: 36, height: 36)
-            
-            Image(systemName: systemName)
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(color)
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Quick add to Inbox")
+                    .font(.title2.weight(.semibold))
+                
+                Text("Type the thing that just popped into your mind. We’ll save it so you don’t have to remember it.")
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                
+                TextField("Write the thing here…", text: $title)
+                    .textFieldStyle(.roundedBorder)
+                    .padding(.top, 4)
+                
+                Spacer()
+            }
+            .padding()
+            .navigationTitle("New Inbox Item")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        onCancel()
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Add") {
+                        onAdd(title)
+                    }
+                    .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
         }
     }
+}
+
+// MARK: - Simple Inbox Task Model
+
+struct InboxTask: Identifiable, Hashable {
+    let id = UUID()
+    var title: String
+    var isCompleted: Bool = false
 }
 
 // MARK: - Liquid Glass Circular Button Style
