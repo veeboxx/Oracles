@@ -101,7 +101,9 @@ private extension HomeView {
                 .font(.headline)
                 .foregroundStyle(.secondary)
             
-            InboxCardView(items: store.folders) // using folders as “inbox items” for now
+            // For now we show an empty inbox state.
+            // Later this will be a real list of tasks.
+            InboxCardView(items: [])
         }
     }
 }
@@ -224,7 +226,7 @@ struct FocusZoneCard: View {
 // MARK: - Inbox Card (one glass box with items inside)
 
 struct InboxCardView: View {
-    let items: [Folder]   // for now we reuse Folder as “inbox items”
+    let items: [Folder]   // later this will be [Task]
     
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -249,10 +251,20 @@ struct InboxCardView: View {
             .padding(.bottom, 8)
             
             if items.isEmpty {
-                Text("Nothing here yet. Tap + to add your first task.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .padding(.top, 4)
+                VStack(spacing: 8) {
+                    Text("📬")
+                        .font(.system(size: 40))
+                    
+                    Text("Your inbox is peacefully empty.")
+                        .font(.subheadline.weight(.semibold))
+                    
+                    Text("Tap the + button when the next task pops into your mind.")
+                        .font(.footnote)
+                        .multilineTextAlignment(.center)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
             } else {
                 ForEach(Array(items.enumerated()), id: \.element.id) { index, folder in
                     InboxItemRow(folder: folder)
@@ -273,7 +285,7 @@ struct InboxCardView: View {
     }
 }
 
-// MARK: - One row inside the Inbox card
+// MARK: - One row inside the Inbox card (for future non-empty state)
 
 struct InboxItemRow: View {
     let folder: Folder
