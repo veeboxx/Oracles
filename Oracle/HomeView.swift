@@ -1,5 +1,6 @@
 import SwiftUI
-import Combine 
+import Combine
+
 // Soft purple accent used throughout the UI
 private let oracleAccent = Color(hue: 0.75, saturation: 0.45, brightness: 0.98)
 
@@ -10,7 +11,7 @@ struct HomeView: View {
     @State private var newTaskTitle: String = ""
     @State private var newTaskPriority: TaskPriority = .medium
 
-    // For now we keep placeholder starter steps.
+    // For now we keep starter steps – these will eventually be AI-generated.
     @State private var starterSteps: [String] = [
         "Open Notes or your doc template",
         "Jot down 3 wins from this week",
@@ -20,8 +21,7 @@ struct HomeView: View {
     var body: some View {
         NavigationStack {
             ZStack(alignment: .bottom) {
-
-                // Background: very light purple gradient
+                // Background gradient
                 LinearGradient(
                     colors: [
                         Color(hue: 0.67, saturation: 0.16, brightness: 0.99),
@@ -32,25 +32,66 @@ struct HomeView: View {
                 )
                 .ignoresSafeArea()
 
-                ScrollView {
+                // CONTENT LAYOUT
+                ZStack(alignment: .top) {
+
+                    // MARK: - SCROLLING LAYER (Inbox only)
+                    ScrollView(showsIndicators: false) {
+                        VStack(alignment: .leading, spacing: 16) {
+
+                            Spacer(minLength: 450)
+
+                            inboxSection
+
+                            Spacer(minLength: 40)
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 96)
+                    }
+                    .mask(
+                        LinearGradient(
+                            gradient: Gradient(stops: [
+                                .init(color: .clear, location: 0.20),   // fully transparent at very top
+                                .init(color: .black, location: 0.45),  // fade in over top ~14%
+                                .init(color: .black, location: 1.0)    // fully visible below
+                            ]),
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+
+
+                    // MARK: - STATIC LAYER (Header + Focus Zone)
                     VStack(alignment: .leading, spacing: 24) {
                         headerSection
 
                         FocusZoneCard(
-                            title: store.focusTask?.title ?? "Write the weekly progress report",
+                            title: focusTaskTitle,
                             steps: starterSteps
                         )
-
-                        inboxSection
                     }
                     .padding(.horizontal, 20)
                     .padding(.top, 24)
-                    .padding(.bottom, 96) // space for floating button
                 }
 
+                // MARK: - Floating + Button
                 floatingAddButton
             }
             .navigationBarHidden(true)
+        }
+    }
+}
+
+// MARK: - Focus Zone Title
+
+private extension HomeView {
+    /// Title shown in the Focus Zone card.
+    /// Uses the first inbox task if available; otherwise a friendly prompt.
+    var focusTaskTitle: String {
+        if let task = store.focusTask {
+            return task.title
+        } else {
+            return "What’s your one important thing today?"
         }
     }
 }
@@ -105,7 +146,6 @@ private extension HomeView {
         }
     }
 }
-
 
 // MARK: - Floating Add Button (centered at bottom)
 
@@ -171,7 +211,7 @@ struct FocusZoneCard: View {
 
                 // Random task button – logic comes later
                 Button {
-                    // In a later branch:
+                    // FUTURE:
                     // ask TaskStore for a random inbox task and promote it to focus
                 } label: {
                     Label("Random task", systemImage: "dice")
@@ -455,9 +495,8 @@ struct AddInboxTaskSheet: View {
                 RoundedRectangle(cornerRadius: 24, style: .continuous)
                     .fill(Color.white)
             )
-            // 👇 equal outer padding so borders look even
             .padding(.horizontal, 16)
-            .padding(.top, 30)
+            .padding(.top, 30)    // top padding = 30 as you wanted
             .padding(.bottom, 16)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
@@ -496,7 +535,7 @@ struct GlassCircleButtonStyle: ButtonStyle {
                         LinearGradient(
                             colors: [
                                 Color.white.opacity(0.35),
-                                Color.white.opacity(0.00)
+                                Color.white.opacity(0.0)
                             ],
                             startPoint: .top,
                             endPoint: .bottom
