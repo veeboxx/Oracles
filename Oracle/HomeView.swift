@@ -1,5 +1,5 @@
 import SwiftUI
-
+import Combine 
 // Soft purple accent used throughout the UI
 private let oracleAccent = Color(hue: 0.75, saturation: 0.45, brightness: 0.98)
 
@@ -7,15 +7,10 @@ struct HomeView: View {
     @EnvironmentObject var store: TaskStore
 
     @State private var showingAddSheet = false
-
-    // Simple local inbox model for now
-    @State private var inboxTasks: [InboxTask] = []
     @State private var newTaskTitle: String = ""
     @State private var newTaskPriority: TaskPriority = .medium
 
-    // For now, this is a placeholder "one" task and steps.
-    // Later we’ll wire this up to real data + Apple Intelligence.
-    @State private var focusTaskTitle: String = "Write the weekly progress report"
+    // For now we keep placeholder starter steps.
     @State private var starterSteps: [String] = [
         "Open Notes or your doc template",
         "Jot down 3 wins from this week",
@@ -42,7 +37,7 @@ struct HomeView: View {
                         headerSection
 
                         FocusZoneCard(
-                            title: focusTaskTitle,
+                            title: store.focusTask?.title ?? "Write the weekly progress report",
                             steps: starterSteps
                         )
 
@@ -101,15 +96,16 @@ private extension HomeView {
 
 private extension HomeView {
     var inboxSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Inbox")
-                .font(.headline)
-                .foregroundStyle(.secondary)
+        // The first inbox task is used by Focus Zone,
+        // so the list shows only "everything else".
+        let remainingInbox = Array(store.inboxTasks.dropFirst())
 
-            InboxCardView(items: inboxTasks)
+        return VStack(alignment: .leading, spacing: 16) {
+            InboxCardView(items: remainingInbox)
         }
     }
 }
+
 
 // MARK: - Floating Add Button (centered at bottom)
 
@@ -128,30 +124,13 @@ private extension HomeView {
                 title: $newTaskTitle,
                 selectedPriority: $newTaskPriority,
                 onAddToFocus: { title, priority in
-                    let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
-                    guard !trimmed.isEmpty else { return }
-
-                    // Add to inbox
-                    inboxTasks.append(
-                        InboxTask(title: trimmed, priority: priority)
-                    )
-
-                    // Make it the current Focus Zone task
-                    focusTaskTitle = trimmed
-
-                    // Reset + dismiss
+                    store.addTaskAndFocus(title: title, priority: priority)
                     newTaskTitle = ""
                     newTaskPriority = .medium
                     showingAddSheet = false
                 },
                 onAddToInbox: { title, priority in
-                    let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
-                    guard !trimmed.isEmpty else { return }
-
-                    inboxTasks.append(
-                        InboxTask(title: trimmed, priority: priority)
-                    )
-
+                    store.addTaskToInbox(title: title, priority: priority)
                     newTaskTitle = ""
                     newTaskPriority = .medium
                     showingAddSheet = false
@@ -162,7 +141,6 @@ private extension HomeView {
                     showingAddSheet = false
                 }
             )
-            // 👇 makes the task sheet a short bottom card
             .presentationDetents([.height(360)])
             .presentationDragIndicator(.visible)
             .presentationBackground(.clear)
@@ -193,9 +171,8 @@ struct FocusZoneCard: View {
 
                 // Random task button – logic comes later
                 Button {
-                    // LATER:
-                    //  - Randomly pick another task from your list
-                    //  - Update the focus task + steps
+                    // In a later branch:
+                    // ask TaskStore for a random inbox task and promote it to focus
                 } label: {
                     Label("Random task", systemImage: "dice")
                         .labelStyle(.iconOnly)
@@ -233,13 +210,9 @@ struct FocusZoneCard: View {
                 }
             }
 
-            // Future Apple Intelligence hook
             Button {
                 // FUTURE:
-                // Use Apple Intelligence / Foundation Models here to:
-                //  - Send `title` to the model
-                //  - Get back the 3 smallest first steps
-                //  - Update `steps` state in HomeView
+                // send title to Apple Intelligence and replace steps with AI-generated ones
             } label: {
                 Label("Let Oracle find first 3 steps", systemImage: "sparkles")
                     .font(.subheadline.weight(.semibold))
@@ -255,14 +228,13 @@ struct FocusZoneCard: View {
     }
 }
 
-// MARK: - Inbox Card (one glass box with items inside)
+// MARK: - Inbox Card
 
 struct InboxCardView: View {
-    let items: [InboxTask]
+    let items: [TaskItem]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Header row inside the card
             HStack {
                 Text("Inbox")
                     .font(.subheadline.weight(.semibold))
@@ -270,7 +242,6 @@ struct InboxCardView: View {
                 Spacer()
 
                 Menu {
-                    // NEXT: hook these up to real sorting
                     Button("By Created Date") {}
                     Button("By Priority") {}
                     Button("Alphabetical") {}
@@ -317,10 +288,10 @@ struct InboxCardView: View {
     }
 }
 
-// MARK: - One row inside the Inbox card
+// MARK: - Inbox Row
 
 struct InboxItemRow: View {
-    let task: InboxTask
+    let task: TaskItem
 
     var body: some View {
         HStack(spacing: 12) {
@@ -343,7 +314,7 @@ struct InboxItemRow: View {
     }
 }
 
-// MARK: - Add Task Sheet (short bottom card with purple glow)
+// MARK: - Add Task Sheet (short bottom card)
 
 struct AddInboxTaskSheet: View {
     @Binding var title: String
@@ -355,11 +326,9 @@ struct AddInboxTaskSheet: View {
     @FocusState private var isTitleFocused: Bool
 
     var body: some View {
-        // Sheet height is controlled by .presentationDetents in HomeView.
         VStack {
-            // Card anchored to bottom of that height
             VStack(alignment: .leading, spacing: 20) {
-                // Header row
+                // Header
                 HStack {
                     Text("Add task")
                         .font(.title2.weight(.semibold))
@@ -376,7 +345,7 @@ struct AddInboxTaskSheet: View {
                     .buttonStyle(.plain)
                 }
 
-                // Task title field – underline style
+                // Task field
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Task")
                         .font(.caption)
@@ -393,7 +362,7 @@ struct AddInboxTaskSheet: View {
                     }
                 }
 
-                // Priority chips – emoji only
+                // Priority row
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Priority")
                         .font(.caption)
@@ -432,26 +401,21 @@ struct AddInboxTaskSheet: View {
                     .frame(maxWidth: .infinity, alignment: .center)
                 }
 
-                // Two big buttons
+                // Buttons
                 VStack(spacing: 10) {
-                    // Add to Focus Zone (with soft purple glow)
                     Button {
                         onAddToFocus(title, selectedPriority)
                     } label: {
                         HStack {
                             Spacer()
-
                             Text("Add to ")
                                 .font(.body.weight(.semibold))
                                 .foregroundColor(.white)
-
                             Text("Focus Zone")
                                 .font(.body.weight(.semibold))
                                 .foregroundColor(oracleAccent)
-
                             Image(systemName: "arrow.right")
                                 .foregroundColor(.white)
-
                             Spacer()
                         }
                         .padding(.vertical, 12)
@@ -461,10 +425,9 @@ struct AddInboxTaskSheet: View {
                             .fill(Color.black)
                     )
                     .shadow(color: oracleAccent.opacity(0.45),
-                            radius: 18, x: 0, y: 10)   // soft purple glow
+                            radius: 18, x: 0, y: 10)
                     .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
 
-                    // Add to Inbox
                     Button {
                         onAddToInbox(title, selectedPriority)
                     } label: {
@@ -492,6 +455,7 @@ struct AddInboxTaskSheet: View {
                 RoundedRectangle(cornerRadius: 24, style: .continuous)
                     .fill(Color.white)
             )
+            // 👇 equal outer padding so borders look even
             .padding(.horizontal, 16)
             .padding(.top, 30)
             .padding(.bottom, 16)
@@ -499,49 +463,9 @@ struct AddInboxTaskSheet: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
         .background(Color.clear)
         .onAppear {
-            // Autofocus the keyboard – tiny delay works best on sheets
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
                 isTitleFocused = true
             }
-        }
-    }
-}
-
-// MARK: - Simple Inbox Task Model + Priority
-
-struct InboxTask: Identifiable, Hashable {
-    let id = UUID()
-    var title: String
-    var isCompleted: Bool = false
-    var priority: TaskPriority = .medium
-}
-
-enum TaskPriority: String, CaseIterable, Identifiable {
-    case chill
-    case low
-    case medium
-    case high
-    case urgent
-
-    var id: String { rawValue }
-
-    var emoji: String {
-        switch self {
-        case .chill:  return "😌"
-        case .low:    return "🫧"
-        case .medium: return "🙂"
-        case .high:   return "🔥"
-        case .urgent: return "💀"
-        }
-    }
-
-    var color: Color {
-        switch self {
-        case .chill:  return .gray
-        case .low:    return .green
-        case .medium: return .blue
-        case .high:   return .orange
-        case .urgent: return .red
         }
     }
 }
@@ -557,25 +481,22 @@ struct GlassCircleButtonStyle: ButtonStyle {
                 .regular.tint(oracleAccent.opacity(0.1)),
                 in: Circle()
             )
-            // inner subtle edge for depth
             .overlay(
                 Circle()
                     .stroke(Color.black.opacity(0.03), lineWidth: 0.8)
                     .blur(radius: 0.6)
             )
-            // bright crisp main edge
             .overlay(
                 Circle()
                     .strokeBorder(Color.white.opacity(0.65), lineWidth: 1.2)
             )
-            // ✨ top rim light (halo highlight)
             .overlay(
                 Circle()
                     .stroke(
                         LinearGradient(
                             colors: [
-                                Color.white.opacity(0.35),   // top highlight
-                                Color.white.opacity(0.00)    // fades down
+                                Color.white.opacity(0.35),
+                                Color.white.opacity(0.00)
                             ],
                             startPoint: .top,
                             endPoint: .bottom
@@ -584,10 +505,8 @@ struct GlassCircleButtonStyle: ButtonStyle {
                     )
                     .blur(radius: 1.2)
             )
-            // deeper downward shadow + magical glow
             .shadow(color: Color.black.opacity(0.22), radius: 14, x: 0, y: 10)
             .shadow(color: oracleAccent.opacity(0.40), radius: 26, x: 0, y: 0)
-            // press animation
             .scaleEffect(configuration.isPressed ? 0.94 : 1.0)
             .opacity(configuration.isPressed ? 0.90 : 1.0)
             .animation(
@@ -606,4 +525,3 @@ struct HomeView_Previews: PreviewProvider {
             .environmentObject(store)
     }
 }
-
